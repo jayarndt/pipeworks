@@ -261,6 +261,125 @@ minetest.register_node("pipeworks:mese_filter", {
 	end,
 })
 
+-- Digi Filter
+
+local on_digiline_receive = function (pos, node, channel, msg)
+	local setchan = minetest.get_meta(pos):get_string("channel")
+	if channel == setchan and msg == "punch" then
+		minetest.registered_nodes[node.name].on_punch(pos,node,nil)
+	end
+end
+
+minetest.register_craftitem("pipeworks:digi_filter", {
+	description = "Mese filter",
+	stack_max = 99,
+})
+
+minetest.register_node("pipeworks:digi_filter", {
+	description = "Mese filter that is controlled via digilines instead of mesecons",
+	tiles = {"pipeworks_digi_filter_top.png", "pipeworks_digi_filter_top.png", "pipeworks_digi_filter_output.png",
+		"pipeworks_digi_filter_input.png", "pipeworks_digi_filter_side.png", "pipeworks_digi_filter_top.png"},
+	paramtype2 = "facedir",
+	groups = {snappy=2,choppy=2,oddly_breakable_by_hand=2,tubedevice=1},
+	legacy_facedir_simple = true,
+	sounds = default.node_sound_wood_defaults(),
+	digiline ={receptor = {},effector = {action = on_digiline_receive}},
+	on_receive_fields = function(pos, formname, fields, sender)
+		if (fields.channel) then
+			minetest.get_meta(pos):set_string("channel", fields.channel)
+			minetest.get_meta(pos):set_string("formspec","invsize[8,7;]"..
+			"list[current_name;main;0,0;8,2;]"..
+			"list[current_player;main;0,2.5;8,4;]"..
+			"field[2.5,6.80;4,1;channel;Channel;"..fields.channel.."]"..
+			"button[6.5,6.45;1.5,1;name;Set Channel]")
+			minetest.get_meta(pos):set_string("infotext", "Digi filter, Channel: "..fields.channel)
+		end
+	end,
+	on_construct = function(pos)
+		local meta = minetest.get_meta(pos)
+		
+		local inv = meta:get_inventory()
+		inv:set_size("main", 8*2)
+		
+		meta:set_string("channel", "")
+		
+		local setchan = meta:get_string("channel")
+
+		meta:set_string("formspec","invsize[8,7;]"..
+		"list[current_name;main;0,0;8,2;]"..
+		"list[current_player;main;0,2.5;8,4;]"..
+		"field[2.5,6.80;4,1;channel;Channel;"..setchan.."]"..
+		"button[6.5,6.45;1.5,1;name;Set Channel]")
+		meta:set_string("infotext", "Digi filter")
+		
+	end,
+	can_dig = function(pos,player)
+		local meta = minetest.get_meta(pos);
+		local inv = meta:get_inventory()
+		return inv:is_empty("main")
+	end,
+	after_place_node = function(pos)
+		pipeworks.scan_for_tube_objects(pos)
+	end,
+	after_dig_node = function(pos)
+		pipeworks.scan_for_tube_objects(pos)
+	end,
+	tube={connect_sides={right=1}},
+	on_punch = function (pos, node, puncher)
+		local meta = minetest.get_meta(pos);
+		local inv = meta:get_inventory()
+		local dir = facedir_to_right_dir(node.param2)
+		local frompos = {x=pos.x - dir.x, y=pos.y - dir.y, z=pos.z - dir.z}
+		local fromnode=minetest.get_node(frompos)
+		local idef = minetest.registered_nodes[fromnode.name]
+		-- assert(idef)
+		local tube = idef.tube
+		if not (tube and tube.input_inventory) then
+			return
+		end
+		
+		if tube.before_filter then
+			tube.before_filter(frompos)
+		end
+		local frommeta = minetest.get_meta(frompos)
+		local frominv = frommeta:get_inventory()
+		
+		local function from_inventory(frominvname)
+			local sname
+			for _,filter in ipairs(inv:get_list("main")) do
+				sname = filter:get_name()
+				if sname ~= "" then
+					-- XXX: that's a lot of parameters
+					if grabAndFire(frominv, frominvname, frompos, fromnode, sname, tube, idef, dir, true) then
+						return true
+					end
+				end
+			end
+			if inv:is_empty("main") then
+				grabAndFire(frominv, frominvname, frompos, fromnode, nil, tube, idef, dir, true)
+				return true
+			end
+			return false
+		end
+		
+		if type(tube.input_inventory) == "table" then
+			for _, i in ipairs(tube.input_inventory) do
+				if from_inventory(i) then -- fired an item
+					break
+				end
+			end
+		else
+			from_inventory(tube.input_inventory)
+		end
+		
+		if tube.after_filter then
+			tube.after_filter(frompos)
+		end
+	end,
+})
+
+-- End Digi Filter
+
 local function roundpos(pos)
 	return {x=math.floor(pos.x+0.5),y=math.floor(pos.y+0.5),z=math.floor(pos.z+0.5)}
 end
