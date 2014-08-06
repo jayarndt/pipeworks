@@ -292,6 +292,16 @@ minetest.register_craft( {
 })
 
 minetest.register_craft( {
+	output = "pipeworks:digi_filter 2",
+	recipe = {
+	        { "default:steel_ingot", "default:steel_ingot", "homedecor:plastic_sheeting" },
+	        { "default:stick", "digilines:wire_std_00000000", "homedecor:plastic_sheeting" },
+	        { "default:steel_ingot", "default:steel_ingot", "homedecor:plastic_sheeting" }
+	},
+})
+
+
+minetest.register_craft( {
 	output = "pipeworks:autocrafter 2",
 	recipe = {
 	        { "default:steel_ingot", "default:mese_crystal", "default:steel_ingot" },
