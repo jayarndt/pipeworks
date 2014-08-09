@@ -265,8 +265,44 @@ minetest.register_node("pipeworks:mese_filter", {
 
 local on_digiline_receive = function (pos, node, channel, msg)
 	local setchan = minetest.get_meta(pos):get_string("channel")
-	if channel == setchan and msg == "punch" then
-		minetest.registered_nodes[node.name].on_punch(pos,node,nil)
+	if channel == setchan then
+		if msg == "punch" then
+			minetest.registered_nodes[node.name].on_punch(pos,node,nil)
+		elseif msg == "scan" then
+			local response = {filterpos = {x=pos.x, y=pos.y, z=pos.z}}
+			
+			local dir = facedir_to_right_dir(node.param2)
+			response.frompos = {x=pos.x - dir.x, y=pos.y - dir.y, z=pos.z - dir.z}
+			local fromnode = minetest.get_node(response.frompos)
+			response.fromnode = fromnode.name
+			local frommeta = minetest.get_meta(response.frompos)
+			response.infotext = frommeta:get_string("infotext")
+			
+			local tube = minetest.registered_nodes[fromnode.name].tube
+			if tube and tube.input_inventory then
+				response.stacks = {}
+				local frominv = frommeta:get_inventory()
+				
+				if type(tube.input_inventory) ~= "table" then
+					tube.input_inventory = {tube.input_inventory}
+				end
+				
+				for _, i in ipairs(tube.input_inventory) do
+					for slot, stack in ipairs(frominv:get_list(i)) do
+						local rs = {
+							inventory = i,
+							slot = slot,
+							name = stack:get_name(),
+							count = stack:get_count(),
+							wear = stack:get_wear(),
+							max = stack:get_stack_max()
+						}
+						table.insert(response.stacks, rs)
+					end
+				end
+			end
+			digiline:receptor_send(pos, digiline.rules.default, channel, response)
+		end
 	end
 end
 
